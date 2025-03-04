@@ -11,6 +11,7 @@ import pickle
 import random
 import time
 import gym
+import d4rl
 import torch
 import numpy as np
 
@@ -406,7 +407,7 @@ class Experiment:
 
         def get_env_builder(seed, env_name, target_goal=None):
             def make_env_fn():
-
+                
                 env = gym.make(env_name)
                 env.seed(seed)
                 if hasattr(env.env, "wrapped_env"):
