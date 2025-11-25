@@ -39,8 +39,9 @@ class Logger:
                         total_transitions_sampled,
                     )
                     
-        wandb.log(outputs, step = iter_num, commit= True)
+        wandb.log(outputs, step = iter_num, commit= False)
         wandb.log(rcsl_outputs, step = iter_num, commit= True)
+        print("completed logging")
 
     def create_log_path(self, variant):
         now = datetime.now().strftime("%Y.%m.%d/%H%M%S")

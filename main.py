@@ -415,7 +415,7 @@ class Experiment:
 
         rc_loss = 0
 
-        for eval_rtg_coef in [0, 0.1, 0.2, 0.3, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 1.0]:
+        for eval_rtg_coef in [0, 0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 1.0]:
             
             eval_rtg = self.variant["eval_rtg"] * eval_rtg_coef
             print(f"Evaluating on eval_rtg_coef: {eval_rtg_coef}, ({eval_rtg})")
@@ -457,11 +457,12 @@ class Experiment:
             rcsl_std_length.add_data(eval_rtg, std_length)
 
             rc_loss += rc_error    
+            rc_loss /= len(eval_rtgs)
         
         step = self.pretrain_iter + self.online_iter
-        outputs[f'rcsl_evaluation/RCSL Error Table'] = rcsl_error_table
+        outputs['rcsl_evaluation/RCSL Error Table'] = rcsl_error_table
         outputs["rcsl_evaluation/RCSL Table"] = rcsl_table
-        outputs[f'rcsl_evaluation/RCSL std Table'] = rcsl_std_table 
+        outputs['rcsl_evaluation/RCSL std Table'] = rcsl_std_table 
         outputs["rcsl_evaluation/RCSL total loss"] = rc_loss
         outputs["rcsl_evaluation/RCSL mean length"] = rcsl_mean_length
         outputs["rcsl_evaluation/RCSL std length"] = rcsl_std_length
