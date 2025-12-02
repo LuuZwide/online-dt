@@ -1,0 +1,62 @@
+BootStrap: library
+From: ubuntu:20.04
+
+%post    
+    apt-get update && apt-get install -y \
+    wget bzip2 git python3.8 python3-pip python3-venv \
+    libglew-dev libosmesa6-dev libgl1-mesa-glx \
+    libglfw3 patchelf 
+    ln -sf /usr/bin/python3.8 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.8 /usr/bin/python
+
+    python3 --version
+    which python3
+
+
+    # Mujoco
+    export MUJOCO_PY_MUJOCO_PATH=/opt/mujoco/mujoco210
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/mujoco/mujoco210/bin
+
+    chmod 1777 /tmp
+    rm -f /tmp/mujocopy-buildlock
+
+    git clone https://github.com/LuuZwide/mujoco-py
+    cd mujoco-py/
+    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.dev.txt
+    apt-get install libglew-dev
+    pip install "Cython<3"
+    python3 setup.py build install
+    cd ..
+
+    # Miniconda 
+    wget https://repo.anaconda.com/miniconda/Miniconda3-py39_25.1.1-0-Linux-x86_64.sh -O /tmp/miniconda.sh
+    bash /tmp/miniconda.sh -b -p /opt/conda
+    rm /tmp/miniconda.sh
+
+    /opt/conda/bin/conda init bash
+
+    /opt/conda/bin/conda env create --prefix /opt/envs/odt_test -f /opt/online-dt/conda_env.yml
+
+    #Give read-write permission to envs folder
+    chmod -R 777 /opt/envs/odt_test/lib/python3.8/site-packages/
+
+    # D4RL
+    python3 --version
+    which python3
+
+%files
+    /opt/online-dt
+    /opt/online-dt/mujoco /opt/mujoco
+
+%environment 
+    export MUJOCO_PY_MUJOCO_PATH=/opt/mujoco/mujoco210
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/mujoco/mujoco210/bin
+
+%runscript
+    . /opt/conda/etc/profile.d/conda.sh
+    conda activate /opt/online-dt/envs/odt_test
+    bash -c "cd /opt/online-dt/data"
+    python3 /opt/online-dt/data/download_d4rl_gym_datasets.py
+    bash -c "cd .."
+    python3 /opt/online-dt/main.py --device cpu
