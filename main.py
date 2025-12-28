@@ -209,6 +209,12 @@ class Experiment:
             # generate init state
             target_return = [target_explore * self.reward_scale] * online_envs.num_envs
 
+            if randomized:
+                target_return = [
+                    random.uniform(0, target_explore) * self.reward_scale
+                    for _ in range(online_envs.num_envs)
+                ]
+
             returns, lengths, trajs = vec_evaluate_episode_rtg(
                 online_envs,
                 self.state_dim,
@@ -347,6 +353,7 @@ class Experiment:
                 online_envs,
                 self.variant["online_rtg"],
                 n=self.variant["num_online_rollouts"],
+                randomized=self.variant['randomized_target_return']
             )
             outputs.update(augment_outputs)
 
@@ -588,6 +595,8 @@ if __name__ == "__main__":
     parser.add_argument("--log_to_tb", "-w", type=bool, default=True)
     parser.add_argument("--save_dir", type=str, default="./exp")
     parser.add_argument("--exp_name", type=str, default="default")
+
+    parser.add_argument("--randomized_target_return", type=bool, default=False)
 
     args = parser.parse_args()
 
