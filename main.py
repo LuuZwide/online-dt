@@ -91,9 +91,9 @@ class Experiment:
         self.total_transitions_sampled = 0
         self.variant = variant
         self.reward_scale = 0.001
-        name = variant["exp_name"]
+        variant["exp_name"] = "ODT-"+ variant["env"]+ "-"+ variant["tag"]
         wandb.init(
-            name = "ODT_"+variant["env"],
+            name = variant["exp_name"],
             project = "online-decision-transformer",
             config=variant,
             tags = [],
@@ -543,8 +543,6 @@ class Experiment:
             self.online_tuning(online_envs, eval_envs, loss_fn)
             online_envs.close()
 
-        outputs = self.final_evaluate(eval_envs)
-
         eval_envs.close()
         wandb.finish()
         print(f"wandb finialized")
@@ -597,6 +595,7 @@ if __name__ == "__main__":
     parser.add_argument("--exp_name", type=str, default="default")
 
     parser.add_argument("--randomized_target_return", type=bool, default=False)
+    parser.add_argument("--tag" , type=str, default="")
 
     args = parser.parse_args()
 
