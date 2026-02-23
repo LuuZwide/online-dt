@@ -1,2 +1,4 @@
 data/*.pkl
 decision_transformer/*.Identifier
+wandb/*
+exp/*
