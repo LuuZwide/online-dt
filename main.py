@@ -291,6 +291,9 @@ class Experiment:
             outputs = {"time/total": time.time() - self.start_time}
             outputs.update(train_outputs)
             outputs.update(eval_outputs)
+            rcl_outputs = self.evaluate_rcsl(eval_envs)
+            outputs.update(rcl_outputs)
+            
             self.logger.log_metrics(
                 outputs,
                 iter_num=self.pretrain_iter,
