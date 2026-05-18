@@ -44,6 +44,11 @@ class Logger:
         print("completed logging")
 
     def create_log_path(self, variant):
+        if variant.get("continue_training", False):
+            resume_path = variant.get("resume_path")
+            if resume_path and os.path.exists(resume_path):
+                return resume_path
+
         now = datetime.now().strftime("%Y.%m.%d/%H%M%S")
         exp_name = variant["exp_name"]
         prefix = variant["save_dir"]

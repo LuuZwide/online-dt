@@ -33,8 +33,37 @@ MAX_EPISODE_LEN = 1000
 os.environ["WANDB_MODE"] = "offline"
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    v = v.lower()
+    if v in ("yes", "true", "t", "y", "1"):
+        return True
+    if v in ("no", "false", "f", "n", "0"):
+        return False
+    raise argparse.ArgumentTypeError("Boolean value expected. Use yes/no.")
+
+
 class Experiment:
     def __init__(self, variant):
+
+        variant["exp_name"] = "ODT-" + variant["env"] + "-" + variant["tag"]
+
+        checkpoint_meta = None
+        if variant.get("continue_training", False):
+            resume_path = variant.get("resume_path")
+            if not resume_path:
+                resume_path = self._find_latest_checkpoint_dir(
+                    variant["save_dir"], variant["exp_name"]
+                )
+                variant["resume_path"] = resume_path
+
+            if resume_path:
+                checkpoint_meta = self._load_checkpoint_metadata(resume_path)
+                print(f"Resuming training from: {resume_path}")
+            else:
+                print("No previous checkpoint found. Starting a new training run.")
+                variant["continue_training"] = False
 
         self.state_dim, self.act_dim, self.action_range = self._get_env_spec(variant)
         self.offline_trajs, self.state_mean, self.state_std = self._load_dataset(
@@ -91,16 +120,70 @@ class Experiment:
         self.total_transitions_sampled = 0
         self.variant = variant
         self.reward_scale = 0.001
-        variant["exp_name"] = "ODT-"+ variant["env"]+ "-"+ variant["tag"]
-        wandb.init(
-            name = variant["exp_name"],
-            project = "online-decision-transformer",
-            config=variant,
-            tags = [],
-            reinit=True
-        )
+
+        wandb_run_id = None
+        if checkpoint_meta:
+            wandb_run_id = checkpoint_meta.get("wandb_run_id")
+
+        if variant.get("continue_training", False):
+            wandb.init(
+                id=wandb_run_id,
+                resume="allow",
+                name=variant["exp_name"],
+                project="online-decision-transformer",
+                config=variant,
+                tags=[],
+                reinit=True,
+            )
+        else:
+            wandb.init(
+                name=variant["exp_name"],
+                project="online-decision-transformer",
+                config=variant,
+                tags=[],
+                reinit=True,
+            )
+
+        if wandb.run is not None:
+            self.variant["wandb_run_id"] = wandb.run.id
+
         print("wandb initialised")
         self.logger = Logger(variant)
+
+        if self.variant.get("continue_training", False):
+            self._load_model(self.logger.log_path)
+
+    def _find_latest_checkpoint_dir(self, save_dir, exp_name):
+        prefix = Path(save_dir)
+        if not prefix.exists():
+            return None
+
+        candidates = []
+        for model_path in prefix.rglob("model.pt"):
+            run_dir = model_path.parent
+            if run_dir.name.endswith(f"-{exp_name}"):
+                candidates.append(run_dir)
+
+        # Backward-compatible fallback for earlier directory naming schemes.
+        if not candidates:
+            for model_path in prefix.rglob("model.pt"):
+                candidates.append(model_path.parent)
+
+        if not candidates:
+            return None
+
+        latest = max(candidates, key=lambda p: p.stat().st_mtime)
+        return str(latest)
+
+    def _load_checkpoint_metadata(self, path_prefix):
+        model_path = Path(path_prefix) / "model.pt"
+        if not model_path.exists():
+            return None
+
+        with open(model_path, "rb") as f:
+            checkpoint = torch.load(f, map_location="cpu")
+
+        return checkpoint
 
     def _get_env_spec(self, variant):
         env = gym.make(variant["env"])
@@ -126,6 +209,9 @@ class Experiment:
             "python": random.getstate(),
             "pytorch": torch.get_rng_state(),
             "log_temperature_optimizer_state_dict": self.log_temperature_optimizer.state_dict(),
+            "wandb_run_id": wandb.run.id if wandb.run is not None else self.variant.get("wandb_run_id"),
+            "aug_trajs": self.aug_trajs,
+            "replay_buffer_trajectories": self.replay_buffer.trajectories,
         }
 
         with open(f"{path_prefix}/model.pt", "wb") as f:
@@ -140,7 +226,7 @@ class Experiment:
     def _load_model(self, path_prefix):
         if Path(f"{path_prefix}/model.pt").exists():
             with open(f"{path_prefix}/model.pt", "rb") as f:
-                checkpoint = torch.load(f)
+                checkpoint = torch.load(f, map_location=self.device)
             self.model.load_state_dict(checkpoint["model_state_dict"])
             self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
@@ -153,6 +239,12 @@ class Experiment:
             np.random.set_state(checkpoint["np"])
             random.setstate(checkpoint["python"])
             torch.set_rng_state(checkpoint["pytorch"])
+            if "wandb_run_id" in checkpoint:
+                self.variant["wandb_run_id"] = checkpoint["wandb_run_id"]
+            if "aug_trajs" in checkpoint:
+                self.aug_trajs = checkpoint["aug_trajs"]
+            if "replay_buffer_trajectories" in checkpoint:
+                self.replay_buffer.trajectories = checkpoint["replay_buffer_trajectories"]
             print(f"Model loaded at {path_prefix}/model.pt")
 
     def _load_dataset(self, env_name):
@@ -599,6 +691,20 @@ if __name__ == "__main__":
 
     parser.add_argument("--randomized_target_return", type=bool, default=False)
     parser.add_argument("--tag" , type=str, default="")
+    parser.add_argument(
+        "--continue_training",
+        type=str2bool,
+        nargs="?",
+        const=True,
+        default=False,
+        help="Resume from last checkpoint. Accepts yes/no (or true/false).",
+    )
+    parser.add_argument(
+        "--resume_path",
+        type=str,
+        default="",
+        help="Optional checkpoint directory path containing model.pt.",
+    )
 
     args = parser.parse_args()
 
